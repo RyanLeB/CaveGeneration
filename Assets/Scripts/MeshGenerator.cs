@@ -4,23 +4,23 @@ using System.Collections.Generic;
 
 public class MeshGenerator : MonoBehaviour
 {
-    // Square grid
+
     public SquareGrid squareGrid;
     public MeshFilter walls;
+    public MeshFilter cave;
 
-    
-    // Lists
+    public bool is2D;
+
     List<Vector3> vertices;
     List<int> triangles;
-    
 
-    
     Dictionary<int, List<Triangle>> triangleDictionary = new Dictionary<int, List<Triangle>>();
     List<List<int>> outlines = new List<List<int>>();
     HashSet<int> checkedVertices = new HashSet<int>();
-    
-    
-    // Generate mesh
+
+
+    // Use this for initialization
+
     public void GenerateMesh(int[,] map, float squareSize)
     {
 
@@ -42,15 +42,35 @@ public class MeshGenerator : MonoBehaviour
         }
 
         Mesh mesh = new Mesh();
-        GetComponent<MeshFilter>().mesh = mesh;
+        cave.mesh = mesh;
 
         mesh.vertices = vertices.ToArray();
         mesh.triangles = triangles.ToArray();
         mesh.RecalculateNormals();
 
-        CreateWallMesh();
+        int tileAmount = 10;
+        Vector2[] uvs = new Vector2[vertices.Count];
+        for (int i = 0; i < vertices.Count; i++)
+        {
+            float percentX = Mathf.InverseLerp(-map.GetLength(0) / 2 * squareSize, map.GetLength(0) / 2 * squareSize, vertices[i].x) * tileAmount;
+            float percentY = Mathf.InverseLerp(-map.GetLength(0) / 2 * squareSize, map.GetLength(0) / 2 * squareSize, vertices[i].z) * tileAmount;
+            uvs[i] = new Vector2(percentX, percentY);
+        }
+        mesh.uv = uvs;
+
+
+        if (is2D)
+        {
+            Generate2DColliders();
+        }
+        else
+        {
+            CreateWallMesh();
+        }
     }
-    // Create wall mesh
+
+
+    // Creates wall mesh
     void CreateWallMesh()
     {
 
@@ -83,8 +103,38 @@ public class MeshGenerator : MonoBehaviour
         wallMesh.vertices = wallVertices.ToArray();
         wallMesh.triangles = wallTriangles.ToArray();
         walls.mesh = wallMesh;
+
+        MeshCollider wallCollider = walls.gameObject.AddComponent<MeshCollider>();
+        wallCollider.sharedMesh = wallMesh;
     }
-    // Triangulate the square
+
+
+    // Generates 2D colliders
+    void Generate2DColliders()
+    {
+
+        EdgeCollider2D[] currentColliders = gameObject.GetComponents<EdgeCollider2D>();
+        for (int i = 0; i < currentColliders.Length; i++)
+        {
+            Destroy(currentColliders[i]);
+        }
+
+        CalculateMeshOutlines();
+
+        foreach (List<int> outline in outlines)
+        {
+            EdgeCollider2D edgeCollider = gameObject.AddComponent<EdgeCollider2D>();
+            Vector2[] edgePoints = new Vector2[outline.Count];
+
+            for (int i = 0; i < outline.Count; i++)
+            {
+                edgePoints[i] = new Vector2(vertices[outline[i]].x, vertices[outline[i]].z);
+            }
+            edgeCollider.points = edgePoints;
+        }
+
+    }
+    // Triangulates the square
     void TriangulateSquare(Square square)
     {
         switch (square.configuration)
@@ -151,7 +201,8 @@ public class MeshGenerator : MonoBehaviour
         }
 
     }
-    // Mesh from points
+
+    // Creates mesh from points
     void MeshFromPoints(params Node[] points)
     {
         AssignVertices(points);
@@ -166,7 +217,9 @@ public class MeshGenerator : MonoBehaviour
             CreateTriangle(points[0], points[4], points[5]);
 
     }
-    // Assign vertices
+
+
+    // Assigns vertices
     void AssignVertices(Node[] points)
     {
         for (int i = 0; i < points.Length; i++)
@@ -178,7 +231,8 @@ public class MeshGenerator : MonoBehaviour
             }
         }
     }
-    // Create triangle
+
+    // Creates triangle
     void CreateTriangle(Node a, Node b, Node c)
     {
         triangles.Add(a.vertexIndex);
@@ -190,7 +244,9 @@ public class MeshGenerator : MonoBehaviour
         AddTriangleToDictionary(triangle.vertexIndexB, triangle);
         AddTriangleToDictionary(triangle.vertexIndexC, triangle);
     }
-    // Add triangle to dictionary
+
+
+    // Adds triangle to dictionary
     void AddTriangleToDictionary(int vertexIndexKey, Triangle triangle)
     {
         if (triangleDictionary.ContainsKey(vertexIndexKey))
@@ -204,7 +260,9 @@ public class MeshGenerator : MonoBehaviour
             triangleDictionary.Add(vertexIndexKey, triangleList);
         }
     }
-    // Calculate the mesh outlines
+
+
+    // Calculates mesh outlines
     void CalculateMeshOutlines()
     {
 
@@ -226,7 +284,10 @@ public class MeshGenerator : MonoBehaviour
             }
         }
     }
-    // Follow the outline of the mesh
+
+
+
+    // Follows the outline
     void FollowOutline(int vertexIndex, int outlineIndex)
     {
         outlines[outlineIndex].Add(vertexIndex);
@@ -238,7 +299,9 @@ public class MeshGenerator : MonoBehaviour
             FollowOutline(nextVertexIndex, outlineIndex);
         }
     }
-    // Get the connected outline vertex
+
+
+    // Gets connected outline vertex
     int GetConnectedOutlineVertex(int vertexIndex)
     {
         List<Triangle> trianglesContainingVertex = triangleDictionary[vertexIndex];
@@ -262,7 +325,9 @@ public class MeshGenerator : MonoBehaviour
 
         return -1;
     }
-    // Check if the edge is an outline edge
+
+
+    // Checks if it is an outline edge
     bool IsOutlineEdge(int vertexA, int vertexB)
     {
         List<Triangle> trianglesContainingVertexA = triangleDictionary[vertexA];
@@ -281,7 +346,9 @@ public class MeshGenerator : MonoBehaviour
         }
         return sharedTriangleCount == 1;
     }
-    // Triangle struct
+
+
+    // struct for triangles
     struct Triangle
     {
         public int vertexIndexA;
@@ -315,7 +382,9 @@ public class MeshGenerator : MonoBehaviour
             return vertexIndex == vertexIndexA || vertexIndex == vertexIndexB || vertexIndex == vertexIndexC;
         }
     }
-    // SquareGrid class
+
+
+    // Square grid class
     public class SquareGrid
     {
         public Square[,] squares;
@@ -349,6 +418,8 @@ public class MeshGenerator : MonoBehaviour
 
         }
     }
+
+
     // Square class
     public class Square
     {
@@ -393,6 +464,7 @@ public class MeshGenerator : MonoBehaviour
             position = _pos;
         }
     }
+
 
     // Control node class
     public class ControlNode : Node
